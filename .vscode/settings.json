@@ -1,0 +1,11 @@
+{
+  // Auto-format only TypeScript and JavaScript, with Prettier. Every other
+  // file type (JSON, Markdown, CSS, HTML, YAML, ...) is left as written.
+  "editor.formatOnSave": false,
+  "editor.formatOnPaste": false,
+  "[typescript][typescriptreact][javascript][javascriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.formatOnPaste": true
+  }
+}

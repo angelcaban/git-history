@@ -1,0 +1,218 @@
+"""
+Read-only access to git repositories. Every operation is served over WebSocket
+(graphql-ws protocol) at /graphql.
+"""
+type Query {
+  """
+  Opens a repository at a revision. The first request for a URL clones it on the
+  server; later requests reuse the clone and refresh it periodically.
+  """
+  repository(
+    "Repository URL: https, http, ssh, git, or scp-like `git@host:path`."
+    url: String!
+    "Branch, tag, or commit. Defaults to the repository's default branch."
+    ref: String
+  ): Repository!
+}
+
+"A repository resolved to a single commit."
+type Repository {
+  url: String!
+  "The ref that was requested (`HEAD` when none was given)."
+  ref: String!
+  "Full sha of the commit that `ref` resolved to."
+  commit: String!
+  """
+  The directory at `path` (the repository root by default), with all of its
+  descendants. GraphQL selections have a fixed depth, so either select as many
+  levels of `children` as you need or use `files` for a flat listing.
+  """
+  tree(path: String): DirectoryNode!
+  "Every file and submodule in the repository, as a flat list."
+  files: [TreeNode!]!
+  "A file's contents."
+  file(path: String!): FileContents!
+  "Every line of a file with the commit that last changed it."
+  blame(path: String!): Blame!
+  """
+  Commits that changed a file, newest first, following it across renames. Each
+  commit's `parents` are rewritten to its nearest ancestors that also changed the
+  file, so the commits form the file's own history graph.
+  """
+  fileHistory(
+    path: String!
+    "Return at most this many commits, 1 to 1000. Defaults to 200."
+    first: Int
+  ): FileHistory!
+  """
+  Blame for a range of lines plus every commit that changed those lines, newest
+  first, following the lines across renames.
+  """
+  lineHistory(
+    path: String!
+    "First line, 1-based."
+    start: Int!
+    "Last line, inclusive. Defaults to `start`."
+    end: Int
+  ): LineHistory!
+}
+
+union TreeNode = FileNode | SubmoduleNode | DirectoryNode
+
+type FileNode {
+  name: String!
+  path: String!
+  "Blob object id."
+  oid: String!
+  mode: String!
+  "Size in bytes. A Float because GraphQL Int is limited to 32 bits."
+  size: Float!
+}
+
+type SubmoduleNode {
+  name: String!
+  path: String!
+  "Commit the submodule is pinned to."
+  oid: String!
+}
+
+type DirectoryNode {
+  name: String!
+  path: String!
+  "Directories first, then files, each group sorted by name."
+  children: [TreeNode!]!
+}
+
+enum FileEncoding {
+  UTF8
+  BASE64
+}
+
+type FileContents {
+  path: String!
+  oid: String!
+  "Size in bytes."
+  size: Float!
+  "True when the file contains a NUL byte in its first 8000 bytes."
+  binary: Boolean!
+  "UTF8 for text files, BASE64 for binary files."
+  encoding: FileEncoding!
+  content: String!
+}
+
+type Person {
+  name: String!
+  email: String!
+  "ISO 8601 timestamp."
+  date: String!
+}
+
+"A commit and the path a file had in it."
+type Revision {
+  sha: String!
+  path: String!
+}
+
+type BlameCommit {
+  sha: String!
+  author: Person!
+  committer: Person!
+  summary: String!
+  "True when this commit is the root of history."
+  boundary: Boolean!
+  "The commit and path to blame next to step back past this commit."
+  previous: Revision
+}
+
+type BlameLine {
+  "Line number in the blamed revision."
+  lineNumber: Int!
+  content: String!
+  "Sha of the commit that last changed this line."
+  sha: String!
+  "The commit that last changed this line."
+  commit: BlameCommit!
+  "Line number of this line in `commit`."
+  originalLineNumber: Int!
+  "Path of the file in `commit`."
+  originalPath: String!
+}
+
+type Blame {
+  path: String!
+  lines: [BlameLine!]!
+  "Every commit referenced by `lines`, once each."
+  commits: [BlameCommit!]!
+}
+
+type FileHistory {
+  path: String!
+  commits: [FileHistoryCommit!]!
+  "True when older commits were left out because of `first`."
+  truncated: Boolean!
+}
+
+type FileHistoryCommit {
+  sha: String!
+  """
+  Parents within the file's history: the nearest ancestors that also changed the
+  file. A parent missing from `commits` was left out because of `first`.
+  """
+  parents: [String!]!
+  author: Person!
+  committer: Person!
+  summary: String!
+  "Path of the file in this commit."
+  path: String!
+}
+
+type LineRange {
+  start: Int!
+  end: Int!
+}
+
+type LineHistory {
+  path: String!
+  range: LineRange!
+  "Blame for the lines in `range`."
+  annotations: Blame!
+  "Commits that changed the lines, newest first."
+  history: [LineHistoryEntry!]!
+}
+
+type LineHistoryEntry {
+  sha: String!
+  parents: [String!]!
+  author: Person!
+  committer: Person!
+  summary: String!
+  "Path of the file in this commit."
+  path: String!
+  "Path of the file in the parent; null when this commit introduced the lines."
+  previousPath: String
+  "How the tracked lines changed in this commit."
+  hunks: [Hunk!]!
+}
+
+type Hunk {
+  oldStart: Int!
+  oldLines: Int!
+  newStart: Int!
+  newLines: Int!
+  lines: [HunkLine!]!
+}
+
+enum HunkLineType {
+  CONTEXT
+  ADDED
+  REMOVED
+}
+
+type HunkLine {
+  type: HunkLineType!
+  content: String!
+  "Line number before the change; null for added lines."
+  oldLineNumber: Int
+  "Line number after the change; null for removed lines."
+  newLineNumber: Int
+}

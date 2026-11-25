@@ -1,0 +1,10 @@
+# Prettier formats only TypeScript and JavaScript sources.
+*
+!*/
+!*.ts
+!*.tsx
+!*.js
+!*.jsx
+
+dist/
+staging/

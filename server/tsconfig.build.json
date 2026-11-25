@@ -1,0 +1,14 @@
+// Production build: compiles src/ (without tests) to dist/. `npm run build` also
+// copies schema.graphql, which server.ts reads at runtime from next to itself.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "types": ["node"],
+    "declaration": false,
+    "declarationMap": false
+  },
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
+}
